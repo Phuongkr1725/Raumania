@@ -1,224 +1,125 @@
-"""
-Medical Image Classifier - Streamlit Web Application
-"""
-
 import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image
-import os
+from ultralytics import YOLO
 
-# Page configuration
 st.set_page_config(
     page_title="Medical Image Classifier",
-    page_icon="🏥",
+    page_icon="🧠",
     layout="wide"
 )
 
+st.markdown(
+    """
+    <style>
+    /* ===== BACKGROUND ===== */
+    .stApp {
+        background: radial-gradient(circle at top, #eef3ff 0%, #ffffff 60%);
+    }
+
+    /* ===== MAIN CARD ===== */
+    .block-container {
+        max-width: 1100px;
+        margin: auto;
+        background: white;
+        padding: 3rem 3rem 3.5rem;
+        border-radius: 26px;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.08);
+    }
+
+    /* ===== TITLE GRADIENT ===== */
+    .title-gradient {
+        text-align: center;
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #4f8cff, #6a5cff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.3rem;
+    }
+
+    /* ===== SUBTITLE ===== */
+    .subtitle-gradient {
+        text-align: center;
+        font-size: 1.15rem;
+        font-weight: 500;
+        color: #5f6c8a;
+        margin-bottom: 1.6rem;
+    }
+
+    /* ===== INFO BOX ===== */
+    .stAlert {
+        border-radius: 14px;
+        font-size: 0.95rem;
+    }
+
+    /* ===== UPLOAD BOX ===== */
+    section[data-testid="stFileUploader"] {
+        background: #f7f9fc;
+        border-radius: 16px;
+        padding: 1.3rem;
+        border: 1px dashed #c7d2fe;
+        margin-bottom: 2rem;
+    }
+
+    /* ===== IMAGE CARD ===== */
+    img {
+        border-radius: 18px;
+    }
+
+    div[data-testid="column"] {
+        background: #ffffff;
+        padding: 1.2rem;
+        border-radius: 22px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+@st.cache_resource
 def load_model():
-    """Load the trained model"""
-    try:
-        import tensorflow as tf
-        model_path = "models/medical_classifier_model.h5"
-        
-        if os.path.exists(model_path):
-            model = tf.keras.models.load_model(model_path)
-            return model
-        else:
-            return None
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
+    return YOLO("model/best.pt")
 
-def preprocess_image(image, target_size=(224, 224)):
-    """Preprocess uploaded image for prediction"""
-    try:
-        # Convert PIL image to numpy array
-        img_array = np.array(image)
-        
-        # Convert to RGB if needed
-        if len(img_array.shape) == 3 and img_array.shape[2] == 4:
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
-        elif len(img_array.shape) == 2:
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-        
-        # Resize image
-        img_resized = cv2.resize(img_array, target_size)
-        
-        # Normalize pixel values
-        img_normalized = img_resized.astype('float32') / 255.0
-        
-        # Add batch dimension
-        img_batch = np.expand_dims(img_normalized, axis=0)
-        
-        return img_batch
-    except Exception as e:
-        st.error(f"Error preprocessing image: {e}")
-        return None
+st.markdown(
+    """
+    <h1 class="title-gradient">Medical Image Classifier</h1>
+    <h3 class="subtitle-gradient">Disease Detection from Medical Images (YOLO)</h3>
+    """,
+    unsafe_allow_html=True
+)
 
-def predict_pneumonia(model, image):
-    """Make prediction on uploaded image"""
-    try:
-        preprocessed_image = preprocess_image(image)
-        
-        if preprocessed_image is None:
-            return None
-        
-        # Make prediction
-        prediction = model.predict(preprocessed_image, verbose=0)
-        confidence = float(prediction[0][0])
-        
-        # Interpret prediction
-        if confidence > 0.5:
-            predicted_class = "Pneumonia"
-            confidence_percent = confidence * 100
-        else:
-            predicted_class = "Normal"
-            confidence_percent = (1 - confidence) * 100
-        
-        return {
-            'class': predicted_class,
-            'confidence': confidence_percent,
-            'raw_prediction': confidence
-        }
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
-        return None
+st.info("⚠️ This system is for educational support only. Not a medical diagnosis.")
 
-def main():
-    """Main Streamlit application"""
-    
-    # Header
-    st.title("🏥 Medical Image Classifier")
-    st.subheader("Pneumonia Detection in Chest X-rays")
-    
-    # Sidebar
-    st.sidebar.header("About This Tool")
-    st.sidebar.info(
-        "This application uses a convolutional neural network (CNN) "
-        "to analyze chest X-ray images and detect signs of pneumonia. "
-        "Upload an X-ray image to get a prediction."
-    )
-    
-    st.sidebar.warning(
-        "⚠️ **Medical Disclaimer**: This tool is for educational purposes only. "
-        "It should not be used as a substitute for professional medical diagnosis. "
-        "Always consult qualified healthcare professionals for medical decisions."
-    )
-    
-    # Load model
-    with st.spinner("Loading AI model..."):
-        model = load_model()
-    
-    if model is None:
-        st.error("❌ Model not found!")
-        st.info("Please run the training script first: `python src/model_training.py`")
-        st.stop()
-    else:
-        st.success("✅ AI model loaded successfully!")
-    
-    # Main content
-    col1, col2 = st.columns([1, 1])
-    
+model = load_model()
+
+uploaded_file = st.file_uploader(
+    "📤 Upload Medical Image",
+    type=["jpg", "png", "jpeg"]
+)
+
+if uploaded_file:
+    image = Image.open(uploaded_file).convert("RGB")
+    img_np = np.array(image)
+
+    col1, col2 = st.columns(2, gap="large")
+
     with col1:
-        st.header("📤 Upload X-ray Image")
-        
-        uploaded_file = st.file_uploader(
-            "Choose a chest X-ray image...",
-            type=['png', 'jpg', 'jpeg'],
-            help="Upload a chest X-ray image in PNG, JPG, or JPEG format"
-        )
-        
-        if uploaded_file is not None:
-            # Display uploaded image
-            image = Image.open(uploaded_file)
-            st.image(image, caption="Uploaded X-ray", use_column_width=True)
-            
-            # Image info
-            st.write(f"**Image size:** {image.size}")
-            st.write(f"**File size:** {uploaded_file.size} bytes")
-    
-    with col2:
-        st.header("🔬 Analysis Results")
-        
-        if uploaded_file is not None:
-            # Make prediction
-            with st.spinner("Analyzing image..."):
-                result = predict_pneumonia(model, image)
-            
-            if result is not None:
-                # Display results
-                if result['class'] == "Pneumonia":
-                    st.error(f"🚨 **Prediction: {result['class']}**")
-                    st.write(f"**Confidence:** {result['confidence']:.1f}%")
-                else:
-                    st.success(f"✅ **Prediction: {result['class']}**")
-                    st.write(f"**Confidence:** {result['confidence']:.1f}%")
-                
-                # Confidence bar
-                confidence_bar = result['confidence'] / 100
-                st.progress(confidence_bar)
-                
-                # Additional information
-                st.subheader("📊 Technical Details")
-                st.write(f"**Raw prediction score:** {result['raw_prediction']:.4f}")
-                st.write(f"**Threshold:** 0.5")
-                st.write(f"**Model architecture:** CNN with 4 convolutional blocks")
-                
-                # Interpretation guide
-                st.subheader("📋 How to Interpret")
-                st.write("""
-                - **Normal**: No signs of pneumonia detected
-                - **Pneumonia**: Potential signs of pneumonia detected
-                - **Confidence**: How certain the model is about its prediction
-                - **Higher confidence** indicates more certainty in the prediction
-                """)
-        else:
-            st.info("👆 Please upload a chest X-ray image to get started")
-    
-    # Additional sections
-    st.header("🧠 About the AI Model")
-    
-    col3, col4, col5 = st.columns(3)
-    
-    with col3:
-        st.metric("Model Type", "CNN")
-        st.write("Convolutional Neural Network optimized for medical imaging")
-    
-    with col4:
-        st.metric("Training Images", "~6,000")
-        st.write("Trained on diverse chest X-ray dataset")
-    
-    with col5:
-        st.metric("Accuracy", "~89%")
-        st.write("Performance on test dataset")
-    
-    # Model architecture
-    if st.expander("🏗️ Model Architecture Details"):
-        st.write("""
-        **Layer Structure:**
-        1. Input Layer (224x224x3)
-        2. Conv2D + BatchNorm + MaxPool + Dropout (32 filters)
-        3. Conv2D + BatchNorm + MaxPool + Dropout (64 filters)  
-        4. Conv2D + BatchNorm + MaxPool + Dropout (128 filters)
-        5. GlobalAveragePooling2D
-        6. Dense + BatchNorm + Dropout (256 units)
-        7. Dense Output (1 unit, sigmoid activation)
-        
-        **Training Details:**
-        - Optimizer: Adam (learning_rate=0.001)
-        - Loss: Binary Crossentropy
-        - Data Augmentation: Applied during training
-        - Early Stopping: Prevents overfitting
-        """)
-    
-    # Footer
-    st.markdown("---")
-    st.markdown(
-        "**Developed by Sunny Nguyen** | "
-        "[GitHub](https://github.com/sunnynguyen-ai) | "
-        "[LinkedIn](https://linkedin.com/in/sunnynguyen-ai)"
-    )
+        st.image(image, use_container_width=True, caption="Original Image")
 
-if __name__ == "__main__":
-    main()
+    with col2:
+        result = model(img_np)[0]
+        annotated = result.plot()
+
+        annotated = cv2.resize(
+            annotated,
+            (img_np.shape[1], img_np.shape[0])
+        )
+
+        st.image(
+            annotated,
+            use_container_width=True,
+            caption="Detection Result"
+        )
